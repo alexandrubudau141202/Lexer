@@ -6,6 +6,39 @@ public class Lexer {
     public static int line = 1;
     private char peek = ' ';
     
+    public static boolean scan(String s){ 
+        int state = 0;
+        int i = 0;
+        while (state >= 0 && i<s.length()){
+            final char c = s.charAt(i++);
+            switch(state){
+                case 0:
+                    if(c == '_')
+                        state = 1;
+                    else if (Character.isLetter(c))
+                        state = 2;
+                    else 
+                        state = -1;
+                    break;
+                case 1:
+                    if(c == '_')
+                        state = 1;
+                    else if(Character.isLetter(c) || Character.isDigit(c))
+                        state = 2;
+                    else
+                        state = -1;
+                    break;
+                case 2:
+                    if(Character.isLetter(c) || Character.isDigit(c) || c == '_')
+                        state = 2;
+                    else 
+                        state = -1; 
+                    break;
+            }
+        }
+        return state == 2;
+    }
+    
     private void readch(BufferedReader br) {
         try {
             peek = (char) br.read();
@@ -13,13 +46,14 @@ public class Lexer {
             peek = (char) -1; // ERROR
         }
     }
+    
 
     public Token lexical_scan(BufferedReader br) {
         while (peek == ' ' || peek == '\t' || peek == '\n'  || peek == '\r') {
             if (peek == '\n') line++;
             readch(br);
         }
-        
+    
         switch (peek) {
                 case '!':
                     peek = ' ';
@@ -52,11 +86,46 @@ public class Lexer {
                     peek = ' ';
                     return Token.mult;
                 case '/':
-                    peek = ' ';
+                readch(br);
+                    if (peek == '/') {
+                    // Skip until the end of the line
+                    while (peek != '\n' && peek != (char)-1) {
+                        readch(br);
+                    }
+                    return lexical_scan(br); // Recursively continue scanning after the comment
+                } else if(peek == '*') {
+                    // Skip multi-line comments
+                    readch(br);
+                    while (true) {
+                        if (peek == (char)-1) {
+                            System.err.println("Multi-line comment must end with */");
+                            return null;
+                        }
+                        if (peek == '\n') {
+                            line++;
+                       } 
+                        if (peek != '*'){
+                            readch(br);
+                        }
+                        if (peek == '*' && peek != (char)-1) {
+                            readch(br);
+                            if (peek == '/') {
+                                break;
+                            }
+                        }
+                    }
+                    readch(br);
+                    return lexical_scan(br); // recursive call to continue scanning
+                }
+                else{
+                    //peek = ' ';
                     return Token.div;
+                }
                 case ';':
                     peek = ' ';
                     return Token.semicolon;
+                    case '.':
+                    return Token.dot;
                 case ',':
                     peek = ' ';
                     return Token.comma;
@@ -153,26 +222,30 @@ public class Lexer {
                         default:
                         return new Word(Tag.ID, s);
                     }
-                } else if (Character.isDigit(peek)) {
+                }
+                else if (Character.isDigit(peek)) {
                     String integer = "";
-                    do{
+                    for(; Character.isDigit(peek); readch(br))
                         integer += peek;
-                        readch(br);
-                    } while(Character.isDigit(peek));
-                    return new NumberTok(integer);
-                } 
-                    else {
+                    if((integer.charAt(0) == '0') && !integer.equals("0")){
+                        System.err.println("Error: starting number with 0 is unacceptable. " + integer);
+                        return null;
+                    }
+                    else{
+                        return new NumberTok(Integer.parseInt(integer));
+                    }
+                }
+                else {
                         System.err.println("Erroneous character: " 
                                 + peek );
                         return null;
                 }
-                
             }
     }
 		
     public static void main(String[] args) {
         Lexer lex = new Lexer();
-        File text_file = new File("file.txt");
+        String text_file = "file.txt";
         try {
             BufferedReader br = new BufferedReader(new FileReader(text_file));
             Token tok;
